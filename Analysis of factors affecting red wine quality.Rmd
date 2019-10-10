@@ -1,0 +1,477 @@
+---
+title: "Analysis of factors affecting red wine quality"
+author: "_Ruofan Zang_"
+date: "_August 17, 2019_"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Introduction
+<p style="text-align:justify;">
+Nowadays, red wine is increasingly enjoyed by a wider range of consumers. With its growth, the quality of red wine is becoming more and more important. It is better for people who like drinking red wine to understand the efect factors of red wine quality and know how to judge whether or not it is the one with good quality.
+</p>
+
+<p style="text-align:justify;">
+In this project, we will figure out which attributes affect the quality of red wine significantly.
+</p>
+
+<p style="text-align:justify;">
+The data set is available from this [link](https://www.kaggle.com/uciml/red-wine-quality-cortez-et-al-2009) in kaggle and its original source is the UCI Machine Learning Repository, you can find the data set [here](https://archive.ics.uci.edu/ml/datasets/wine+quality) from the source. The goal of this data set and our model is to determine the red wine quality, so the outcome of the project is the quality of red wine and we will display the quality quantitatively as the quality score. The detaied explanation of the data set is as follows:
+</p>
+
+* fixed acidity: most acids involved with wine or fixed or nonvolatile, _numeric variable_ (g/L)
+* volatile acidity: the amount of acetic acid in wine, which at too high of levels can lead to an unpleasant, vinegar taste, _numeric variable_ (g/L)
+* citric acid: found in small quantities, citric acid can add 'freshness' and flavor to wines, _numeric variable_ (g/L)
+* residual sugar: the amount of sugar remaining after fermentation stops, _numeric variable_ (g/L)
+* chlorides: the amount of salt in the wine, _numeric variable_ (g/L)
+* free sulfur dioxide: the free form of SO2 exists in equilibrium between molecular SO2 and bisulfite ion; it prevents microbial growth and the oxidation of wine, _numeric variable_
+* total sulfur dioxide: amount of free and bound forms of S02, _numeric variable_
+* density: the density of water is close to that of water depending on the percent alcohol and sugar content, _numeric variable_
+* pH: describes how acidic or basic a wine is on a scale from 0 (very acidic) to 14 (very basic), _numeric variable_
+* sulphates: a wine additive which can contribute to sulfur dioxide gas levels, which acts as an antimicrobial and antioxidant, _numeric variable_
+* alcohol: the percent alcohol content of the wine, _numeric variable_
+* quality: output variable (based on sensory data, score between 0 and 10), _integer variable_
+
+## Import and inspect
+```{r}
+data <- read.csv('C:/Users/RUOFAN/Documents/R/course/winequality_red.csv')
+```
+
+```{r}
+# display the row number of the data set
+nrow(data)
+```
+
+```{r}
+# display the column number of the data set
+ncol(data)
+```
+
+```{r}
+# display the first few rows and columns
+head(data)
+```
+
+```{r}
+# display types and structure of each column
+str(data)
+```
+<p style="text-align:justify;">
+We can see that all the variables in this dataset are numeric variables.
+</p>
+
+```{r}
+# check whether there are missing values in each column
+colSums(is.na(data))
+red_wine <- na.omit(data)
+```
+<p style="text-align:justify;">
+We can see that there does not have any missing data in this dataset.
+</p>
+
+```{r}
+# all the columns contain numeric variables, we don't have categorical values
+# we don't have missing values
+summary(red_wine)
+```
+
+# Feature Engineering: Part I
+<p style="text-align:justify;">
+The target variable in this project is **quality**.
+</p>
+
+```{r message=FALSE, warning=FALSE}
+library(ggplot2)
+qplot(red_wine$quality)
+```
+
+<p style="text-align:justify;">
+To explore better, I create a new variable rating, which classifies Wines into Good, Bad, and Average depending on their quality scores. BAD is quality less than 5. AVERAGE is quality less than 7 but greater than or equal to 5. GOOD is any number above and including 7.
+</p>
+```{r}
+red_wine$rating <- ifelse(red_wine$quality < 6, 'bad', ifelse(red_wine$quality == 6, 'average', 'good'))
+red_wine$rating <- ordered(red_wine$rating, levels = c('bad', 'average', 'good'))
+qplot(red_wine$rating)
+```
+
+<p style="text-align:justify;">
+Because all the variables are numeric, I will mainly use histogram to explore each variable.
+</p>
+```{r message=FALSE, warning=FALSE}
+library(gridExtra)
+grid.arrange(qplot(red_wine$fixed.acidity, xlab = 'fixed.acidity', ylab = 'count'),
+             qplot(red_wine$volatile.acidity,  xlab = 'volatile.acidity', ylab = 'count'),
+             qplot(red_wine$citric.acid, xlab = 'citric.acid', ylab = 'count'),
+             qplot(red_wine$residual.sugar, xlab = 'residual.sugar', ylab = 'count'),
+             qplot(red_wine$chlorides, xlab = 'chlorides', ylab = 'count'),
+             qplot(red_wine$free.sulfur.dioxide, xlab = 'free.sulfur.dioxide', ylab = 'count'),
+             qplot(red_wine$total.sulfur.dioxide, xlab = 'total.sulfur.dioxide', ylab = 'count'),
+             qplot(red_wine$density, xlab = 'density', ylab = 'count'),
+             qplot(red_wine$pH, xlab = 'pH', ylab = 'count'),
+             qplot(red_wine$sulphates, xlab = 'sulphates', ylab = 'count'),
+             qplot(red_wine$alcohol, xlab = 'alcohol', ylab = 'count'),
+             qplot(red_wine$quality, xlab = 'quality', ylab = 'count'),
+             ncol = 4)
+```
+
+<p style="text-align:justify;">
+**Density and pH are almost normally distributed.** Fixed and volatile acidity, free and total sulfur dioxide, sulphates, and alcohol seem to be long-tailed (skewed on one side). Residual sugar and chlorides have extreme outliers. Citric acid has a large number of zero values.
+</p>
+
+**Fixed Acidity**
+<p style="text-align:justify;">
+I used log transformation here.
+</p>
+```{r message=FALSE, warning=FALSE}
+p_fixed.acidity <- ggplot(red_wine, aes(x=(fixed.acidity))) + geom_histogram() + xlab('fixed acidity')
+p_fixed.acidity_log <- ggplot(red_wine, aes(x=(fixed.acidity))) + geom_histogram() + scale_x_log10() + xlab('log fixed acidity')
+grid.arrange(p_fixed.acidity, p_fixed.acidity_log, ncol=2)
+```
+
+**Volatile Acidity**
+<p style="text-align:justify;">
+I used log transformation here.
+</p>
+```{r message=FALSE, warning=FALSE}
+p_volatile.acidity <- ggplot(red_wine, aes(x=(volatile.acidity))) + geom_histogram() + xlab('volatile acidity') 
+p_volatile.acidity_log <- ggplot(red_wine, aes(x=(volatile.acidity))) + geom_histogram() + scale_x_log10() + xlab('log volatile acidity')
+grid.arrange(p_volatile.acidity, p_volatile.acidity_log, ncol=2)
+```
+
+**Citric Acid**
+```{r message=FALSE, warning=FALSE}
+p_citric.acid <- ggplot(red_wine, aes(x=(citric.acid))) + geom_histogram() + xlab('citric acid')
+p_citric.acid_log <- ggplot(red_wine, aes(x=(citric.acid))) + geom_histogram() + scale_x_log10() + xlab('log citric acid')
+grid.arrange(p_citric.acid, p_citric.acid_log, ncol=2)
+
+# 128 zero values in the column of citric.acid 
+print(length(subset(red_wine, citric.acid==0)$citric.acid))
+```
+<p style="text-align:justify;">
+Citric acid was one feature that was found to be not normally distributed on a logarithmic scale. **This is because that citric acid appeared to have a large number of zero values.** This might be a case of non reporting.
+</p>
+
+**Residual Sugar**
+<p style="text-align:justify;">
+Residual sugar is right-skewed distributed with a lot of outliers located at right side and a little bit at left side. To improve the plot, I just removed the top 5% outliers. Then I used log transformation.
+</p>
+```{r message=FALSE, warning=FALSE}
+p_residual.sugar <- ggplot(data = red_wine, aes(x=residual.sugar)) + geom_histogram() + 
+  scale_x_continuous(lim = c(0, quantile(red_wine$residual.sugar, 0.95))) +
+  xlab('residual.sugar, 95th percentile truncated')
+p_residual.sugar_log <- p_residual.sugar + scale_x_log10() + xlab('log residual.sugar, 95th percentile truncated')
+grid.arrange(p_residual.sugar, p_residual.sugar_log, ncol = 2)
+```
+
+**Chlorides**
+<p style="text-align:justify;">
+Chlorides is right-skewed distributed with a lot of outliers located at right side and a little bit at left side.To improve the plot, I just removed the top 5% outliers. Then I used log transformation.
+</p>
+```{r message=FALSE, warning=FALSE}
+p_chlorides <- ggplot(data = red_wine, aes(x=chlorides)) + geom_histogram() + 
+  scale_x_continuous(lim = c(0, quantile(red_wine$chlorides, 0.95))) +
+  xlab('chlorides, 95th percentile truncated')
+p_chlorides_log <- p_chlorides + scale_x_log10() + xlab('log chlorides, 95th percentile truncated')
+grid.arrange(p_chlorides, p_chlorides_log, ncol = 2)
+```
+
+**Sulphates**
+<p style="text-align:justify;">
+Sulphates is right-skewed distributed with a lot of outliers located at right side and a little bit at left side.To improve the plot, I just removed the top 5% outliers.
+</p>
+```{r message=FALSE, warning=FALSE}
+p_sulphates <- ggplot(data = red_wine, aes(x=sulphates)) + geom_histogram() + 
+  scale_x_continuous(lim = c(0, quantile(red_wine$sulphates, 0.95))) +
+  xlab('sulphates, 95th percentile truncated')
+p_sulphates_log <- p_sulphates + scale_x_log10() + xlab('log sulphates, 95th percentile truncated')
+grid.arrange(p_sulphates, p_sulphates_log, ncol = 2)
+```
+
+**Free Sulfur Dioxide**
+<p style="text-align:justify;">
+Free sulfur dioxide is right-skewed without too many ourliers. To improve the plot, I just removed the top 1% outliers and use log transformation.
+</p>
+```{r message=FALSE, warning=FALSE}
+p_free.sulfur.dioxide <- ggplot(data = red_wine, aes(x=free.sulfur.dioxide)) + geom_histogram() + 
+  scale_x_continuous(lim = c(0, quantile(red_wine$free.sulfur.dioxide, 0.99))) +
+  xlab('free.sulfur.dioxide, 99th percentile truncated')
+p_free.sulfur.dioxide_log <- p_free.sulfur.dioxide + scale_x_log10() + xlab('log free.sulfur.dioxide, 99th percentile truncated')
+grid.arrange(p_free.sulfur.dioxide, p_free.sulfur.dioxide_log, ncol = 2)
+```
+
+**Total Sulfur Dioxide**
+<p style="text-align:justify;">
+Total sulfur dioxide is right-skewed without too many ourliers. To improve the plot, I just removed the top 1% outliers and use log transformation.
+</p>
+```{r message=FALSE, warning=FALSE}
+p_total.sulfur.dioxide <- ggplot(data = red_wine, aes(x=total.sulfur.dioxide)) + geom_histogram() + 
+  scale_x_continuous(lim = c(0, quantile(red_wine$total.sulfur.dioxide, 0.99))) +
+  xlab('total.sulfur.dioxide, 99th percentile truncated')
+p_total.sulfur.dioxide_log <- p_total.sulfur.dioxide + scale_x_log10() + xlab('log total.sulfur.dioxide, 99th percentile truncated')
+grid.arrange(p_total.sulfur.dioxide, p_total.sulfur.dioxide_log, ncol = 2)
+```
+
+**Alcohol**
+<p style="text-align:justify;">
+Alcohol is right-skewed without too many ourliers. To improve the plot, I just removed the top 1% outliers and use log transformation.
+</p>
+```{r message=FALSE, warning=FALSE}
+p_alcohol <- ggplot(data = red_wine, aes(x=alcohol)) + geom_histogram() + 
+  scale_x_continuous(lim = c(0, quantile(red_wine$alcohol, 0.99))) +
+  xlab('alcohol, 99th percentile truncated')
+p_alcohol_log <- p_alcohol + scale_x_log10() + xlab('log alcohol, 99th percentile truncated')
+grid.arrange(p_alcohol, p_alcohol_log, ncol = 2)
+```
+
+<p style="text-align:justify;">
+After the transformation, the distributions of each variable are shown below, which look better than original ones.
+</p>
+```{r message=FALSE, warning=FALSE}
+grid.arrange(p_fixed.acidity_log,
+             p_volatile.acidity_log,
+             qplot(red_wine$citric.acid, xlab = 'citric.acid', ylab = 'count'),
+             p_residual.sugar_log + xlab('log residual.sugar'),
+             p_chlorides_log + xlab('log chlorides'),
+             p_free.sulfur.dioxide_log + xlab('log free.sulfur.dioxide'),
+             p_total.sulfur.dioxide_log + xlab('log total.sulfur.dioxide'),
+             qplot(red_wine$density, xlab = 'density', ylab = 'count'),
+             qplot(red_wine$pH, xlab = 'pH', ylab = 'count'),
+             p_sulphates_log + xlab('log sulphates'),
+             p_alcohol_log + xlab('log alcohol'),
+             qplot(red_wine$quality, xlab = 'quality', ylab = 'count'),
+             ncol = 4)
+```
+
+# Feature Engineering: Part II
+```{r message=FALSE, warning=FALSE}
+# create a function to draw bivariate boxplots
+boxplot_bivariate <- function(x, y, ylab) {
+  return(qplot(data = red_wine, x = x, y = y, geom = 'boxplot', ylab = ylab))
+}
+
+grid.arrange(boxplot_bivariate(red_wine$rating, log10(red_wine$fixed.acidity), 'fixed.acidity'),
+             boxplot_bivariate(red_wine$rating, log10(red_wine$volatile.acidity), 'volatile.acidity'),
+             boxplot_bivariate(red_wine$rating, red_wine$citric.acid, 'citric.acid'),
+             boxplot_bivariate(red_wine$rating, log10(red_wine$residual.sugar), 'residual.sugar'),
+             boxplot_bivariate(red_wine$rating, log10(red_wine$chlorides), 'chlorides'),
+             boxplot_bivariate(red_wine$rating, log10(red_wine$free.sulfur.dioxide), 'free.sulfur.dioxide'),
+             boxplot_bivariate(red_wine$rating, log10(red_wine$total.sulfur.dioxide), 'total.sulfur.dioxide'),
+             boxplot_bivariate(red_wine$rating, red_wine$density, 'density'),
+             boxplot_bivariate(red_wine$rating, red_wine$pH, 'pH'),
+             boxplot_bivariate(red_wine$rating, log10(red_wine$sulphates), 'sulphates'),
+             boxplot_bivariate(red_wine$rating, log10(red_wine$alcohol), 'alcohol'),
+             boxplot_bivariate(red_wine$rating, red_wine$quality, 'quality'),
+             ncol = 4)
+```
+<p style="text-align:justify;">
+From exploring these plots, it seems that a 'good' wine generally has these trends:
+</p>
+
+  * higher fixed acidity and citric acid
+  * lower volatile acidity
+  * lower pH (i.e. more acidic)
+  * higher sulphates
+  * higher alcohol
+  * to a lesser extent, lower chlorides and lower density
+  
+<p style="text-align:justify;">
+Residual sugar and sulfur dioxides did not seem to have a dramatic impact on the quality or rating of the wines. Interestingly, it appears that different types of acid affect wine quality differently.
+</p>
+
+## Correlations
+<p style="text-align:justify;">
+By utilizing cor.test, I calculated the correlation for each of these variables against quality.
+</p>
+```{r message=FALSE, warning=FALSE}
+correlations <- c(cor(red_wine$quality, log10(red_wine$fixed.acidity)),
+                  cor(red_wine$quality, log10(red_wine$volatile.acidity)),
+                  cor(red_wine$quality, red_wine$citric.acid),
+                  cor(red_wine$quality, log10(red_wine$residual.sugar)),
+                  cor(red_wine$quality, log10(red_wine$chlorides)),
+                  cor(red_wine$quality, log10(red_wine$free.sulfur.dioxide)),
+                  cor(red_wine$quality, log10(red_wine$total.sulfur.dioxide)),
+                  cor(red_wine$quality, red_wine$density),
+                  cor(red_wine$quality, red_wine$pH),
+                  cor(red_wine$quality, log10(red_wine$sulphates)),
+                  cor(red_wine$quality, log10(red_wine$alcohol)))
+names(correlations) <- c('log.fixed.acidity', 'log.volatile.acidity', 'citric.acid',
+                         'log.residual.sugar', 'log.chlordies', 
+                         'log.free.sulfur.dioxide', 'log.total.sulfur.dioxide', 
+                         'density', 'pH',
+                         'log.sulphates', 'log.alcohol')
+correlations
+```
+<p style="text-align:justify;">
+If the value equals to +3.0 or higher, it means that there is moderate or strong positive relationship between two variables. If the value equals to -3.0 or lower, it means that there is moderate or strong negative relationship between two variables. According to the table above, I chose volatile.acidity (log), citric.acid, log.sulphates (log), and alcohol (log) as my main predictors.
+</p>
+
+## PCA and K-means Clustering
+<p style="text-align:justify;">
+Next, I did principal component analysis to this dataset.
+</p>
+```{r message=FALSE, warning=FALSE}
+# data update
+new_red <- red_wine
+new_red$fixed.acidity <- log10(new_red$fixed.acidity)
+new_red$volatile.acidity <- log10(new_red$volatile.acidity+1)
+new_red$citric.acid <- new_red$citric.acid
+new_red$residual.sugar <- log10(new_red$residual.sugar)
+new_red$chlorides <- log10(new_red$chlorides+1)
+new_red$free.sulfur.dioxide <- log10(new_red$free.sulfur.dioxide)
+new_red$total.sulfur.dioxide <- log10(new_red$total.sulfur.dioxide)
+new_red$density <- new_red$density
+new_red$pH <- new_red$pH
+new_red$sulphates <- log10(new_red$sulphates+1)
+new_red$alcohol <- log10(new_red$alcohol)
+```
+
+```{r message=FALSE, warning=FALSE}
+# PCA
+red_PCA = prcomp(new_red[, 1:11])
+plot(red_PCA, type = 'l')
+summary(red_PCA)
+```
+<p style="text-align:justify;">
+Here we can see that, the first 4 components can explain more than 90% of the variation.
+</P>
+
+```{r message=FALSE, warning=FALSE}
+red_wine_pca <- predict(red_PCA, newdata = new_red)
+red_wine_pca <- as.data.frame(red_wine_pca)
+red_wine_pca[ , 12] <- as.data.frame(new_red$quality)
+colnames(red_wine_pca)[12] <- "quality"
+red_wine_pca[ , 13] <- as.data.frame(new_red$rating)
+colnames(red_wine_pca)[13] <- "rating"
+red_wine_cluster <- red_wine_pca[, c(1,2,3,4)]
+```
+
+<p style="text-align:justify;">
+Next, I tried to classify the dataset based on these 4 PCs to see whether the clusters can match the quality.
+</p>
+```{r message=FALSE, warning=FALSE}
+library(factoextra)
+mydata_st <- red_wine_cluster
+k2 <- kmeans(mydata_st, centers = 2, nstart = 25)
+plot_k2 <- fviz_cluster(k2, geom = "point", data = mydata_st) + ggtitle("k = 2")
+k3 <- kmeans(mydata_st, centers = 3, nstart = 25)
+plot_k3 <- fviz_cluster(k3, geom = "point", data = mydata_st) + ggtitle("k = 3")
+k4 <- kmeans(mydata_st, centers = 4, nstart = 25)
+plot_k4 <- fviz_cluster(k4, geom = "point", data = mydata_st) + ggtitle("k = 4")
+k5 <- kmeans(mydata_st, centers = 5, nstart = 25)
+plot_k5 <- fviz_cluster(k5, geom = "point", data = mydata_st) + ggtitle("k = 5")
+k6 <- kmeans(mydata_st, centers = 6, nstart = 25)
+plot_k6 <- fviz_cluster(k6, geom = "point", data = mydata_st) + ggtitle("k = 6")
+k7 <- kmeans(mydata_st, centers = 7, nstart = 25)
+plot_k7 <- fviz_cluster(k6, geom = "point", data = mydata_st) + ggtitle("k = 7")
+grid.arrange(plot_k2, plot_k3, plot_k4, plot_k5, plot_k6, plot_k7, nrow = 2)
+```
+
+```{r message=FALSE, warning=FALSE}
+# Determine the optimal number of clusters
+set.seed(123)
+fviz_nbclust(mydata_st, kmeans, method = "wss")
+```
+
+<p style="text-align:justify;">
+We can see that both situation of k = 2 and situation of k = 3 show good visual results.
+</p>
+```{r message=FALSE, warning=FALSE}
+grid.arrange(plot_k2, plot_k3, nrow = 1)
+```
+
+# Modeling
+```{r message=FALSE, warning=FALSE}
+# train data and test data
+library(caTools)
+set.seed(123)
+spl = sample.split(red_wine_pca$rating, SplitRatio = 0.7)
+redtrain = subset(red_wine_pca, spl==TRUE)
+redtest = subset(red_wine_pca, spl==FALSE)
+```
+
+## Ordinal Logistic Regression Model
+```{r message=FALSE, warning=FALSE}
+library(MASS)
+library(reshape2)
+red_ordinal <- polr(rating ~ PC1 + PC2 + PC3 + PC4, 
+                    data = redtrain)
+red_ordinal_pred <- predict(red_ordinal, redtest, type = "class")
+table(red_ordinal_pred, redtest$rating)
+```
+
+```{r message=FALSE, warning=FALSE}
+# accuracy
+(145+110+0)/nrow(redtest)
+```
+
+```{r message=FALSE, warning=FALSE}
+red_ordinal <- polr(rating ~ PC1 + PC2 + PC3 + PC4 + PC5, 
+                    data = redtrain)
+red_ordinal_pred <- predict(red_ordinal, redtest, type = "class")
+table(red_ordinal_pred, redtest$rating)
+```
+
+```{r message=FALSE, warning=FALSE}
+# accuracy
+(144+107+0)/nrow(redtest)
+```
+
+## Decision Tree Model
+```{r message=FALSE, warning=FALSE}
+library(rpart)
+red_tree = rpart(rating ~ PC1 + PC2 + PC3 + PC4,
+                 data = redtrain, method = "class")
+red_tree_pred <- predict(red_tree, redtest, type = "class")
+table(red_tree_pred, redtest$rating)
+```
+
+```{r message=FALSE, warning=FALSE}
+# accuracy
+(145+121+0)/nrow(redtest)
+```
+
+```{r message=FALSE, warning=FALSE}
+red_tree = rpart(rating ~ PC1 + PC2 + PC3 + PC4 + PC5,
+                 data = redtrain, method = "class")
+red_tree_pred <- predict(red_tree, redtest, type = "class")
+table(red_tree_pred, redtest$rating)
+```
+
+```{r message=FALSE, warning=FALSE}
+# accuracy
+(147+81+20)/nrow(redtest)
+```
+
+## Random Forest Model
+```{r message=FALSE, warning=FALSE}
+library("randomForest")
+red_forest = randomForest(rating ~ PC1 + PC2 + PC3 + PC4,
+                          data = redtrain)
+red_forest_pred <- predict(red_forest, redtest, type = "class")
+table(red_forest_pred, redtest$rating)
+```
+
+```{r message=FALSE, warning=FALSE}
+# accuracy
+(161+111+28)/nrow(redtest)
+```
+
+```{r message=FALSE, warning=FALSE}
+red_forest = randomForest(rating ~ PC1 + PC2 + PC3 + PC4 + PC5,
+                          data = redtrain)
+red_forest_pred <- predict(red_forest, redtest, type = "class")
+table(red_forest_pred, redtest$rating)
+```
+
+```{r message=FALSE, warning=FALSE}
+# accuracy
+(168+114+31)/nrow(redtest)
+```
+
+# Conclusions
+<p style="text-align:justify;">
+The two main findings through the project is about PCA and models. The viewpoint of the more PCs we choose, the better performance we will get is **not right**. In these three models, I compared the performances of choosing 4 PCs and 5 PCs respectively, only the random forest model provided a little better performance when choosing 5 PCs, the other two models performed better when choosing 4 PCs. After comparing the performances of three models, I found that **random forest** model is the best model to predict red wine quality according to wine chemical properties, as the accuracy rates exceed 60%. Decision tree model and ordinal logistic regression model performed similarly, only a little higher than 50% accuracy.
+</p>
